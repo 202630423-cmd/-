@@ -71,10 +71,10 @@
 
     .range-value {
       text-align: right;
-      font-size: 13px;
+      font-size: 14px;
       color: var(--primary-color);
       font-weight: bold;
-      margin-top: 4px;
+      margin-top: 6px;
     }
 
     .status-badge {
@@ -105,6 +105,11 @@
 
     button:hover {
       background-color: #357ABD;
+    }
+
+    button:disabled {
+      background-color: #A0C4EE;
+      cursor: not-allowed;
     }
 
     /* === 가상 잠금 화면 (Full Screen Overlay) === */
@@ -147,12 +152,12 @@
     }
 
     .timer-display {
-      font-size: 42px;
+      font-size: 38px;
       font-weight: bold;
       letter-spacing: 2px;
       font-family: monospace;
       background: rgba(255, 255, 255, 0.05);
-      padding: 15px 30px;
+      padding: 15px 25px;
       border-radius: 15px;
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
@@ -171,22 +176,23 @@
     <h1>쉼폰 ,</h1>
     <p class="subtitle">일상의 쉼표를 더하는 시간</p>
 
-    <!-- STEP 1 -->
+    <!-- STEP 1: 스마트폰 사용 시간 설정 (1분 ~ 180분) -->
     <div class="step-group">
-      <label for="use-time">STEP 1. 사용 시간 (테스트용 초/분)</label>
-      <input type="range" id="use-time" min="5" max="60" value="10" oninput="updateUseText(this.value)">
-      <div class="range-value" id="use-text">10초 후 잠금</div>
+      <label for="use-time">STEP 1. 스마트폰 사용 시간</label>
+      <input type="range" id="use-time" min="1" max="180" value="30" oninput="updateUseText(this.value)">
+      <div class="range-value" id="use-text">30분 사용 가능</div>
     </div>
 
-    <!-- STEP 2 -->
+    <!-- STEP 2: 스마트폰 잠금 시간 설정 -->
     <div class="step-group">
-      <label for="lock-time">STEP 2. 잠금 유지 시간</label>
+      <label for="lock-time">STEP 2. 사용 후 잠금 시간</label>
       <select id="lock-time">
-        <option value="10">10초 (테스트용)</option>
-        <option value="30">30초 (테스트용)</option>
-        <option value="300">5분</option>
-        <option value="1800">30분</option>
-        <option value="3600">1시간</option>
+        <option value="600">10분 동안 잠금</option>
+        <option value="1800">30분 동안 잠금</option>
+        <option value="3600">1시간 동안 잠금</option>
+        <option value="7200">2시간 동안 잠금</option>
+        <option value="10800">3시간 동안 잠금</option>
+        <option value="NEXT_MORNING">다음 날 아침 7시까지 잠금</option>
       </select>
     </div>
 
@@ -206,30 +212,51 @@
       스마트폰을 잠시 내려놓고 주변을 둘러보세요.<br>
       설정한 휴식 시간이 끝날 때까지 화면이 유지됩니다.
     </div>
-    <div class="timer-display" id="lock-timer">00:00</div>
+    <div class="timer-display" id="lock-timer">00:00:00</div>
   </div>
 
   <script>
     let useTimer = null;
     let lockTimer = null;
 
+    // 슬라이더 값(분)에 따른 텍스트 분/시간 변환 표시
     function updateUseText(val) {
-      document.getElementById('use-text').innerText = val + '초 후 잠금';
+      const minutes = parseInt(val);
+      if (minutes >= 60) {
+        const hours = Math.floor(minutes / 60);
+        const remMins = minutes % 60;
+        const timeStr = remMins > 0 ? `${hours}시간 ${remMins}분` : `${hours}시간`;
+        document.getElementById('use-text').innerText = `${timeStr} 사용 가능`;
+      } else {
+        document.getElementById('use-text').innerText = `${minutes}분 사용 가능`;
+      }
     }
 
     function startShim() {
-      const useSeconds = parseInt(document.getElementById('use-time').value);
-      const lockSeconds = parseInt(document.getElementById('lock-time').value);
+      const useMinutes = parseInt(document.getElementById('use-time').value);
+      const lockOption = document.getElementById('lock-time').value;
 
-      alert(`[쉼폰 시작]\n${useSeconds}초 동안 스마트폰 사용 후 ${lockSeconds}초간 화면 잠금이 실행됩니다.`);
+      // 잠금 시간(초) 계산
+      let lockSeconds = 0;
+      if (lockOption === 'NEXT_MORNING') {
+        const now = new Date();
+        const nextMorning = new Date();
+        nextMorning.setDate(now.getDate() + 1);
+        nextMorning.setHours(7, 0, 0, 0); // 다음 날 아침 07:00:00
+        lockSeconds = Math.floor((nextMorning - now) / 1000);
+      } else {
+        lockSeconds = parseInt(lockOption);
+      }
+
+      alert(`[쉼폰 시작]\n${useMinutes}분 사용 후 화면 잠금이 시작됩니다.`);
 
       document.getElementById('start-btn').innerText = "타이머 동작 중...";
       document.getElementById('start-btn').disabled = true;
 
-      // STEP 1 사용 시간 카운트다운
+      // STEP 1: 설정한 사용 시간(분) 후 잠금 화면 실행
       useTimer = setTimeout(() => {
         triggerLockScreen(lockSeconds);
-      }, useSeconds * 1000);
+      }, useMinutes * 60 * 1000);
     }
 
     // 가상 잠금 화면 실행 함수
@@ -239,7 +266,7 @@
       
       overlay.style.display = 'flex'; // 풀스크린 레이어 표시
 
-      // 전체화면 모드 요청 (브라우저 상단바/하단바 숨김 시도)
+      // 전체화면 모드 요청
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
       }
@@ -252,7 +279,7 @@
       let remaining = durationSeconds;
       updateTimerDisplay(remaining, timerDisplay);
 
-      // 잠금 카운트다운 시작
+      // 잠금 카운트다운 시작 (1초 간격)
       lockTimer = setInterval(() => {
         remaining--;
         updateTimerDisplay(remaining, timerDisplay);
@@ -273,10 +300,21 @@
       }, 1000);
     }
 
+    // 시:분:초 형식 포맷팅 함수
     function updateTimerDisplay(seconds, element) {
-      const mins = Math.floor(seconds / 60);
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
       const secs = seconds % 60;
-      element.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+      const formattedHrs = String(hrs).padStart(2, '0');
+      const formattedMins = String(mins).padStart(2, '0');
+      const formattedSecs = String(secs).padStart(2, '0');
+
+      if (hrs > 0) {
+        element.innerText = `${formattedHrs}:${formattedMins}:${formattedSecs}`;
+      } else {
+        element.innerText = `${formattedMins}:${formattedSecs}`;
+      }
     }
   </script>
 
